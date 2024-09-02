@@ -73,7 +73,7 @@ pub const OpenAI = struct {
     api_key: []const u8,
     organization_id: ?[]const u8,
     alloc: Allocator,
-    headers: std.http.Headers,
+    headers: std.http.Client.Request.Headers,
 
     pub fn init(alloc: Allocator, api_key: []const u8, organization_id: ?[]const u8) !OpenAI {
         const headers = try get_headers(alloc, api_key);
@@ -81,15 +81,21 @@ pub const OpenAI = struct {
     }
 
     pub fn deinit(self: *OpenAI) void {
-        self.headers.deinit();
+        // self.headers.deinit();
+        _ = self;
     }
 
-    fn get_headers(alloc: std.mem.Allocator, api_key: []const u8) !std.http.Headers {
-        var headers = std.http.Headers.init(alloc);
-        try headers.append("Content-Type", "application/json");
-        var auth_header = try std.fmt.allocPrint(alloc, "Bearer {s}", .{api_key});
+    fn get_headers(alloc: std.mem.Allocator, api_key: []const u8) !std.http.Client.Request.Headers {
+        const auth_header = try std.fmt.allocPrint(alloc, "Bearer {s}", .{api_key});
         defer alloc.free(auth_header);
-        try headers.append("Authorization", auth_header);
+        const headers = std.http.Client.Request.Headers{
+            .content_type = std.http.Client.Request.Headers.Value{
+                .override = "application/json",
+            },
+            .authorization = std.http.Client.Request.Headers.Value{
+                .override = auth_header,
+            },
+        };
         return headers;
     }
 
@@ -101,10 +107,14 @@ pub const OpenAI = struct {
 
         const uri = std.Uri.parse("https://api.openai.com/v1/models") catch unreachable;
 
-        var req = try client.request(.GET, uri, self.headers, .{});
+        const server_header_buffer: []u8 = try self.alloc.alloc(u8, 8 * 1024 * 4);
+        var req = try client.open(.GET, uri, std.http.Client.RequestOptions{
+            .server_header_buffer = server_header_buffer,
+            .headers = self.headers,
+        });
         defer req.deinit();
 
-        try req.start();
+        try req.send();
         try req.wait();
 
         const status = req.response.status;
@@ -134,12 +144,16 @@ pub const OpenAI = struct {
         const body = try std.json.stringifyAlloc(self.alloc, payload, .{});
         defer self.alloc.free(body);
 
-        var req = try client.request(.POST, uri, self.headers, .{});
+        const server_header_buffer: []u8 = try self.alloc.alloc(u8, 8 * 1024 * 4);
+        var req = try client.open(.POST, uri, std.http.Client.RequestOptions{
+            .server_header_buffer = server_header_buffer,
+            .headers = self.headers,
+        });
         defer req.deinit();
 
         req.transfer_encoding = .chunked;
 
-        try req.start();
+        try req.send();
         try req.writer().writeAll(body);
         try req.finish();
         try req.wait();
@@ -201,19 +215,19 @@ test "completion" {
     var openai = try OpenAI.init(alloc, api_key.?, null);
     defer openai.deinit();
 
-    var system_message = .{
+    const system_message = .{
         .role = "system",
         .content = "You are a helpful assistant",
     };
 
-    var user_message = .{
+    const user_message = .{
         .role = "user",
         .content = "Write a 1 line haiku",
     };
 
     var messages = [2]Message{ system_message, user_message };
 
-    var payload = CompletionPayload{
+    const payload = CompletionPayload{
         .model = "gpt-3.5-turbo",
         .messages = &messages,
         .max_tokens = 64,

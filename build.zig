@@ -8,7 +8,7 @@ pub fn build(b: *std.Build) !void {
     _ = dep_opts;
 
     _ = b.addModule("zig-llm", .{
-        .source_file = .{ .path = "src/main.zig" },
-        .dependencies = &.{},
+        .root_source_file = b.path("src/main.zig"),
+        // .dependencies = &.{},
     });
 }
