@@ -18,7 +18,7 @@ pub fn main() !void {
     defer openai.deinit();
 
     const models = try openai.get_models();
-    std.debug.print("{any}", .{models});
+    std.debug.print("{}", .{models});
 
     const system_message = .{
         .role = "system",
