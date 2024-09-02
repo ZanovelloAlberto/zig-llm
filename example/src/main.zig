@@ -18,7 +18,11 @@ pub fn main() !void {
     defer openai.deinit();
 
     const models = try openai.get_models();
-    std.debug.print("{}", .{models});
+    std.debug.print("Models: ", .{});
+    for (models) |m| {
+        std.debug.print("{s} ", .{m.id});
+    }
+    std.debug.print("\n", .{});
 
     const system_message = .{
         .role = "system",
@@ -33,7 +37,7 @@ pub fn main() !void {
     var messages = [2]llm.Message{ system_message, user_message };
 
     const payload = llm.CompletionPayload{
-        .model = "gpt-3.5-turbo",
+        .model = "gpt-4o-mini",
         .messages = &messages,
         .max_tokens = 64,
         .temperature = 0,
@@ -42,6 +46,7 @@ pub fn main() !void {
     for (completion.choices) |choice| {
         std.debug.print("Choice:\n {s}", .{choice.message.content});
     }
+    std.debug.print("\n", .{});
 }
 
 test "simple test" {

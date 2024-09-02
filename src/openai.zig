@@ -10,7 +10,7 @@ pub const Usage = struct {
     total_tokens: u64,
 };
 
-pub const Choice = struct { index: usize, finish_reason: ?[]const u8, message: struct { role: []const u8, content: []const u8 } };
+pub const Choice = struct { index: usize, finish_reason: ?[]const u8, message: struct { role: []const u8, content: []const u8, refusal: ?[]const u8 }, logprobs: ?[]const u8 };
 
 pub const Completion = struct {
     id: []const u8,
@@ -20,6 +20,7 @@ pub const Completion = struct {
     choices: []Choice,
     // Usage is not returned by the Completion endpoint when streamed.
     usage: Usage,
+    system_fingerprint: ?[]const u8,
 };
 
 pub const Message = struct {
@@ -87,7 +88,7 @@ pub const OpenAI = struct {
 
     fn get_headers(alloc: std.mem.Allocator, api_key: []const u8) !std.http.Client.Request.Headers {
         const auth_header = try std.fmt.allocPrint(alloc, "Bearer {s}", .{api_key});
-        defer alloc.free(auth_header);
+        //defer alloc.free(auth_header);
         const headers = std.http.Client.Request.Headers{
             .content_type = std.http.Client.Request.Headers.Value{
                 .override = "application/json",
@@ -124,12 +125,13 @@ pub const OpenAI = struct {
         }
 
         const response = req.reader().readAllAlloc(self.alloc, 3276800) catch unreachable;
-        defer self.alloc.free(response);
+        // Can't deinit, because returned defer self.alloc.free(response);
 
         const parsed_models = try std.json.parseFromSlice(ModelResponse, self.alloc, response, .{});
-        defer parsed_models.deinit();
+        // Can't deinit, because returned. defer parsed_models.deinit();
 
         // TODO return this as a slice
+        // FIXME: The above commented out free/deinit seem to break the return value
         return parsed_models.value.data;
     }
 
@@ -170,8 +172,8 @@ pub const OpenAI = struct {
         }
         defer self.alloc.free(response);
 
-        const parsed_completion = try std.json.parseFromSlice(Completion, self.alloc, response, .{});
-        defer parsed_completion.deinit();
+        const parsed_completion = try std.json.parseFromSlice(Completion, self.alloc, response, .{ .ignore_unknown_fields = false });
+        // defer parsed_completion.deinit();
 
         return parsed_completion.value;
     }
