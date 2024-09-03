@@ -5,7 +5,9 @@ const exit = std.process.exit;
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const alloc = gpa.allocator();
-    const env = try std.process.getEnvMap(alloc);
+    defer _ = gpa.deinit();
+    var env = try std.process.getEnvMap(alloc);
+    defer env.deinit();
 
     const api_key = env.get("OPENAI_API_KEY");
     const organization_id = env.get("OPENAI_ORGANIZATION_ID");
@@ -53,7 +55,12 @@ pub fn main() !void {
 test "simple test" {
     // an example test
 
-    var list = std.ArrayList(i32).init(std.testing.allocator);
+    // var list = std.ArrayList(i32).init(std.testing.allocator);
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+
+    // std.debug.print("{s}", .{gpa});
+    var list = std.ArrayList(i32).init(allocator);
     defer list.deinit(); // try commenting this out and see if zig detects the memory leak!
     try list.append(42);
     try std.testing.expectEqual(@as(i32, 42), list.pop());
