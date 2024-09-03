@@ -74,16 +74,20 @@ pub const OpenAI = struct {
     api_key: []const u8,
     organization_id: ?[]const u8,
     alloc: Allocator,
+    arena: *std.heap.ArenaAllocator,
     headers: std.http.Client.Request.Headers,
 
     pub fn init(alloc: Allocator, api_key: []const u8, organization_id: ?[]const u8) !OpenAI {
-        const headers = try get_headers(alloc, api_key);
-        return OpenAI{ .alloc = alloc, .api_key = api_key, .organization_id = organization_id, .headers = headers };
+        var arena = try alloc.create(std.heap.ArenaAllocator);
+        arena.* = std.heap.ArenaAllocator.init(alloc);
+        const headers = try get_headers(arena.allocator(), api_key);
+        return OpenAI{ .alloc = arena.allocator(), .api_key = api_key, .organization_id = organization_id, .headers = headers, .arena = arena };
     }
 
     pub fn deinit(self: *OpenAI) void {
-        // self.headers.deinit();
-        _ = self;
+        const alloc = self.arena.child_allocator;
+        self.arena.deinit();
+        alloc.destroy(self.arena);
     }
 
     fn get_headers(alloc: std.mem.Allocator, api_key: []const u8) !std.http.Client.Request.Headers {
@@ -109,6 +113,7 @@ pub const OpenAI = struct {
         const uri = std.Uri.parse("https://api.openai.com/v1/models") catch unreachable;
 
         const server_header_buffer: []u8 = try self.alloc.alloc(u8, 8 * 1024 * 4);
+        defer self.alloc.free(server_header_buffer);
         var req = try client.open(.GET, uri, std.http.Client.RequestOptions{
             .server_header_buffer = server_header_buffer,
             .headers = self.headers,
@@ -125,13 +130,10 @@ pub const OpenAI = struct {
         }
 
         const response = req.reader().readAllAlloc(self.alloc, 3276800) catch unreachable;
-        // Can't deinit, because returned defer self.alloc.free(response);
 
         const parsed_models = try std.json.parseFromSlice(ModelResponse, self.alloc, response, .{});
-        // Can't deinit, because returned. defer parsed_models.deinit();
 
         // TODO return this as a slice
-        // FIXME: The above commented out free/deinit seem to break the return value
         return parsed_models.value.data;
     }
 
@@ -173,7 +175,6 @@ pub const OpenAI = struct {
         defer self.alloc.free(response);
 
         const parsed_completion = try std.json.parseFromSlice(Completion, self.alloc, response, .{ .ignore_unknown_fields = false });
-        // defer parsed_completion.deinit();
 
         return parsed_completion.value;
     }

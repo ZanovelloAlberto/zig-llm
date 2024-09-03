@@ -3,7 +3,8 @@ const llm = @import("zig-llm");
 const exit = std.process.exit;
 
 pub fn main() !void {
-    const alloc = std.heap.page_allocator;
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const alloc = gpa.allocator();
     const env = try std.process.getEnvMap(alloc);
 
     const api_key = env.get("OPENAI_API_KEY");
