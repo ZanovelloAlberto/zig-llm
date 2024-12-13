@@ -174,7 +174,7 @@ pub const OpenAI = struct {
         }
         defer self.alloc.free(response);
 
-        const parsed_completion = try std.json.parseFromSlice(Completion, self.alloc, response, .{ .ignore_unknown_fields = false });
+        const parsed_completion = try std.json.parseFromSlice(Completion, self.alloc, response, .{ .ignore_unknown_fields = true });
 
         return parsed_completion.value;
     }
